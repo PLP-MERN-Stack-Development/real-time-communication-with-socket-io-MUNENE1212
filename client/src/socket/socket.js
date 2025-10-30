@@ -21,6 +21,8 @@ export const useSocket = () => {
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [currentRoom, setCurrentRoom] = useState(null);
 
   // Connect to socket server
   const connect = (username) => {
@@ -36,8 +38,8 @@ export const useSocket = () => {
   };
 
   // Send a message
-  const sendMessage = (message) => {
-    socket.emit('send_message', { message });
+  const sendMessage = (message, roomId) => {
+    socket.emit('send_message', { message, roomId });
   };
 
   // Send a private message
@@ -46,8 +48,25 @@ export const useSocket = () => {
   };
 
   // Set typing status
-  const setTyping = (isTyping) => {
-    socket.emit('typing', isTyping);
+  const setTyping = (isTyping, roomId) => {
+    socket.emit('typing', { isTyping, roomId });
+  };
+
+  // Room management
+  const createRoom = (name, isPrivate) => {
+    socket.emit('create_room', { name, isPrivate });
+  };
+
+  const joinRoom = (roomId) => {
+    socket.emit('join_room', roomId);
+  };
+
+  const leaveRoom = (roomId) => {
+    socket.emit('leave_room', roomId);
+  };
+
+  const inviteToRoom = (roomId, userId) => {
+    socket.emit('invite_to_room', { roomId, userId });
   };
 
   // Socket event listeners
@@ -108,6 +127,28 @@ export const useSocket = () => {
       setTypingUsers(users);
     };
 
+    // Room events
+    const onRoomList = (roomList) => {
+      setRooms(roomList);
+    };
+
+    const onRoomJoined = ({ room, messages: roomMessages }) => {
+      setCurrentRoom(room);
+      setMessages(roomMessages);
+    };
+
+    const onRoomCreated = (room) => {
+      setRooms((prev) => [...prev, room]);
+    };
+
+    const onUserJoinedRoom = ({ username }) => {
+      // Optionally add a system message
+    };
+
+    const onUserLeftRoom = ({ username }) => {
+      // Optionally add a system message
+    };
+
     // Register event listeners
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -117,6 +158,11 @@ export const useSocket = () => {
     socket.on('user_joined', onUserJoined);
     socket.on('user_left', onUserLeft);
     socket.on('typing_users', onTypingUsers);
+    socket.on('room_list', onRoomList);
+    socket.on('room_joined', onRoomJoined);
+    socket.on('room_created', onRoomCreated);
+    socket.on('user_joined_room', onUserJoinedRoom);
+    socket.on('user_left_room', onUserLeftRoom);
 
     // Clean up event listeners
     return () => {
@@ -128,6 +174,11 @@ export const useSocket = () => {
       socket.off('user_joined', onUserJoined);
       socket.off('user_left', onUserLeft);
       socket.off('typing_users', onTypingUsers);
+      socket.off('room_list', onRoomList);
+      socket.off('room_joined', onRoomJoined);
+      socket.off('room_created', onRoomCreated);
+      socket.off('user_joined_room', onUserJoinedRoom);
+      socket.off('user_left_room', onUserLeftRoom);
     };
   }, []);
 
@@ -138,11 +189,17 @@ export const useSocket = () => {
     messages,
     users,
     typingUsers,
+    rooms,
+    currentRoom,
     connect,
     disconnect,
     sendMessage,
     sendPrivateMessage,
     setTyping,
+    createRoom,
+    joinRoom,
+    leaveRoom,
+    inviteToRoom,
   };
 };
 
