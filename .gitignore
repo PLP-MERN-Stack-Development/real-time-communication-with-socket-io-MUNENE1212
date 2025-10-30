@@ -29,6 +29,16 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Documentation
+CONVERSATION_SUMMARY.md
+DARK_THEME_COMPLETE.md
+IMPLEMENTATION_SUMMARY.md
+MONGODB_INTEGRATION_SUMMARY.md
+MONGODB_SETUP.md
+QUICKSTART.md
+ROOM_FEATURES.md
+test-setup.md
+
 # Misc
 *.tsbuildinfo
 .cache/
