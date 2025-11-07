@@ -75,7 +75,36 @@
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
-  background: white;
+  background: rgba(15, 23, 42, 0.4);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  position: relative;
+}
+
+.room-item .invite-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(139, 92, 246, 0.3);
+  color: #8b5cf6;
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+  opacity: 0;
+  margin-left: auto;
+}
+
+.room-item:hover .invite-btn {
+  opacity: 1;
+}
+
+.room-item .invite-btn:hover {
+  background: rgba(139, 92, 246, 0.5);
+  transform: scale(1.1);
+  box-shadow: 0 0 15px rgba(139, 92, 246, 0.5);
 }
 
 .room-item:hover {

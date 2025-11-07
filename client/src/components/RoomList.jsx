@@ -1,8 +1,13 @@
 import './RoomList.css'
 
-function RoomList({ rooms, currentRoom, onSelectRoom, onCreateRoom }) {
+function RoomList({ rooms, currentRoom, onSelectRoom, onCreateRoom, onInviteToRoom }) {
   const publicRooms = rooms.filter(room => !room.isPrivate)
   const privateRooms = rooms.filter(room => room.isPrivate)
+
+  const handleInviteClick = (e, room) => {
+    e.stopPropagation()
+    onInviteToRoom(room)
+  }
 
   return (
     <div className="room-list">
@@ -32,6 +37,13 @@ function RoomList({ rooms, currentRoom, onSelectRoom, onCreateRoom }) {
                     {room.members?.length || 0} members
                   </span>
                 </div>
+                <button
+                  className="invite-btn"
+                  onClick={(e) => handleInviteClick(e, room)}
+                  title="Invite users to this room"
+                >
+                  +
+                </button>
               </div>
             ))}
           </div>
@@ -56,6 +68,13 @@ function RoomList({ rooms, currentRoom, onSelectRoom, onCreateRoom }) {
                       {room.members?.length || 0} members
                     </span>
                   </div>
+                  <button
+                    className="invite-btn"
+                    onClick={(e) => handleInviteClick(e, room)}
+                    title="Invite users to this private room"
+                  >
+                    +
+                  </button>
                 </div>
               ))}
             </div>

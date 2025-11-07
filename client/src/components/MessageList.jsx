@@ -2,12 +2,37 @@ import { useEffect, useRef, useState } from 'react'
 import { socket } from '../socket/socket'
 import './MessageList.css'
 
-function MessageList({ messages, currentUsername, selectedUser, currentRoom }) {
+function MessageList({ messages, currentUsername, selectedUser, currentRoom, onSelectUser }) {
   const messagesEndRef = useRef(null)
   const [messageReactions, setMessageReactions] = useState({})
   const [userReactions, setUserReactions] = useState({})
   const [page, setPage] = useState(1)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
+
+  // Generate consistent color for each user
+  const getUserColor = (username) => {
+    const colors = [
+      '#8b5cf6', // purple
+      '#3b82f6', // blue
+      '#10b981', // green
+      '#f59e0b', // amber
+      '#ef4444', // red
+      '#ec4899', // pink
+      '#14b8a6', // teal
+      '#f97316', // orange
+    ]
+    let hash = 0
+    for (let i = 0; i < username.length; i++) {
+      hash = username.charCodeAt(i) + ((hash << 5) - hash)
+    }
+    return colors[Math.abs(hash) % colors.length]
+  }
+
+  const handleUsernameClick = (sender, senderId) => {
+    if (sender !== currentUsername && onSelectUser) {
+      onSelectUser({ username: sender, id: senderId })
+    }
+  }
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -67,12 +92,21 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom }) {
   }
 
   const filteredMessages = selectedUser
-    ? messages.filter(msg =>
-        msg.isPrivate && (
-          (msg.sender === selectedUser.username) ||
-          (msg.senderId === selectedUser.id)
-        )
-      )
+    ? messages.filter(msg => {
+        if (!msg.isPrivate) return false;
+
+        // Show messages where:
+        // 1. Current user is the sender and selected user is the recipient
+        // 2. Selected user is the sender and current user is the recipient
+        const isFromCurrentToSelected =
+          msg.sender === currentUsername &&
+          (msg.recipientUsername === selectedUser.username || msg.recipientId === selectedUser.id);
+
+        const isFromSelectedToCurrent =
+          (msg.sender === selectedUser.username || msg.senderId === selectedUser.id);
+
+        return isFromCurrentToSelected || isFromSelectedToCurrent;
+      })
     : messages.filter(msg => !msg.isPrivate)
 
   const reactions = ['👍', '❤️', '😂', '😮', '🎉', '🔥']
@@ -107,11 +141,23 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom }) {
             ) : (
               <>
                 <div className="message-header">
-                  <span className="message-sender">{msg.sender}</span>
+                  <span
+                    className={`message-sender ${msg.sender !== currentUsername ? 'clickable' : ''}`}
+                    style={{ color: getUserColor(msg.sender) }}
+                    onClick={() => handleUsernameClick(msg.sender, msg.senderId)}
+                    title={msg.sender !== currentUsername ? `Click to send private message to ${msg.sender}` : ''}
+                  >
+                    {msg.sender}
+                  </span>
                   <span className="message-time">{formatTime(msg.timestamp)}</span>
                 </div>
                 <div className="message-content">
-                  <p>{msg.message}</p>
+                  <div
+                    className="message-bubble"
+                    style={{ borderLeftColor: getUserColor(msg.sender) }}
+                  >
+                    <p>{msg.message}</p>
+                  </div>
 
                   {msg.isPrivate && (
                     <span className="private-badge">Private</span>

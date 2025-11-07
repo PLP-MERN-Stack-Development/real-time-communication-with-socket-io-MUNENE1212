@@ -43,21 +43,20 @@ io.on('connection', (socket) => {
   // Handle user joining
   socket.on('user_join', async (username) => {
     try {
-      // Find or create user in database
+      // Find user in database (must be authenticated)
       let user = await User.findOne({ username });
 
       if (!user) {
-        user = await User.create({
-          username,
-          socketId: socket.id,
-          isOnline: true
-        });
-      } else {
-        user.socketId = socket.id;
-        user.isOnline = true;
-        user.lastSeen = new Date();
-        await user.save();
+        // User not found - they must register first
+        socket.emit('error', { message: 'User not found. Please register first.' });
+        return;
       }
+
+      // Update user status
+      user.socketId = socket.id;
+      user.isOnline = true;
+      user.lastSeen = new Date();
+      await user.save();
 
       // Store in active users cache
       activeUsers[socket.id] = {
@@ -164,18 +163,48 @@ io.on('connection', (socket) => {
   });
 
   // Handle private messages
-  socket.on('private_message', ({ to, message }) => {
-    const messageData = {
-      id: Date.now(),
-      sender: users[socket.id]?.username || 'Anonymous',
-      senderId: socket.id,
-      message,
-      timestamp: new Date().toISOString(),
-      isPrivate: true,
-    };
-    
-    socket.to(to).emit('private_message', messageData);
-    socket.emit('private_message', messageData);
+  socket.on('private_message', async ({ to, message }) => {
+    try {
+      const sender = activeUsers[socket.id]?.username || 'Anonymous';
+      const recipientUser = activeUsers[to];
+      const recipientUsername = recipientUser?.username || 'Unknown';
+
+      // Save private message to MongoDB with special roomId
+      const privateRoomId = `private_${[socket.id, to].sort().join('_')}`;
+
+      const newMessage = await Message.create({
+        roomId: privateRoomId,
+        sender,
+        senderId: socket.id,
+        message,
+        isPrivate: true,
+        reactions: new Map(),
+        userReactions: new Map()
+      });
+
+      const messageData = {
+        id: newMessage._id.toString(),
+        sender,
+        senderId: socket.id,
+        recipientId: to,
+        recipientUsername: recipientUsername,
+        message,
+        timestamp: newMessage.createdAt,
+        isPrivate: true,
+        reactions: {},
+        userReactions: {}
+      };
+
+      // Send to recipient
+      socket.to(to).emit('private_message', messageData);
+      // Send back to sender for confirmation
+      socket.emit('private_message', messageData);
+
+      console.log(`Private message from ${sender} to ${recipientUsername}`);
+    } catch (error) {
+      console.error('Error sending private message:', error);
+      socket.emit('error', { message: 'Failed to send private message' });
+    }
   });
 
   // Handle message reactions - only one reaction per user per message
@@ -436,6 +465,84 @@ io.on('connection', (socket) => {
 
     io.emit('user_list', Object.values(activeUsers));
   });
+});
+
+// Authentication routes
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Validate input
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    // Check if username already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+
+    // Create new user (password will be hashed automatically by pre-save hook)
+    const user = await User.create({
+      username,
+      password,
+      isOnline: false
+    });
+
+    // Return user data without password
+    res.status(201).json({
+      message: 'Registration successful',
+      user: {
+        id: user._id,
+        username: user.username,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    res.status(500).json({ error: 'Failed to register user' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    // Validate input
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    // Find user by username
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Compare password
+    const isPasswordValid = await user.comparePassword(password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    // Return user data without password
+    res.json({
+      message: 'Login successful',
+      user: {
+        id: user._id,
+        username: user.username,
+        createdAt: user.createdAt
+      }
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Failed to login' });
+  }
 });
 
 // API routes

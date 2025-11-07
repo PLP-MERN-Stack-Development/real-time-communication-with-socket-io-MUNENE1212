@@ -5,6 +5,7 @@ import MessageInput from './MessageInput'
 import UserList from './UserList'
 import RoomList from './RoomList'
 import CreateRoomModal from './CreateRoomModal'
+import InviteModal from './InviteModal'
 import NotificationManager from './NotificationManager'
 import './ChatRoom.css'
 
@@ -21,6 +22,7 @@ function ChatRoom({ username, onLogout }) {
     setTyping,
     createRoom,
     joinRoom,
+    inviteToRoom,
     lastMessage
   } = useSocket()
 
@@ -30,6 +32,8 @@ function ChatRoom({ username, onLogout }) {
   const [showNotification, setShowNotification] = useState(false)
   const [notificationMessage, setNotificationMessage] = useState(null)
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
+  const [roomToInvite, setRoomToInvite] = useState(null)
 
   // Request notification permission on mount
   useEffect(() => {
@@ -129,6 +133,19 @@ function ChatRoom({ username, onLogout }) {
     joinRoom(room.id)
   }
 
+  const handleInviteToRoom = (room) => {
+    setRoomToInvite(room)
+    setShowInviteModal(true)
+  }
+
+  const handleInvite = (roomId, userId) => {
+    inviteToRoom(roomId, userId)
+  }
+
+  const handleSelectUser = (user) => {
+    setSelectedUser(user)
+  }
+
   return (
     <div className="chat-room">
       <div className="chat-header">
@@ -155,6 +172,7 @@ function ChatRoom({ username, onLogout }) {
           currentRoom={currentRoom}
           onSelectRoom={handleSelectRoom}
           onCreateRoom={() => setShowCreateRoomModal(true)}
+          onInviteToRoom={handleInviteToRoom}
         />
 
         <div className="chat-main">
@@ -171,6 +189,7 @@ function ChatRoom({ username, onLogout }) {
             currentUsername={username}
             selectedUser={selectedUser}
             currentRoom={currentRoom}
+            onSelectUser={handleSelectUser}
           />
           <MessageInput
             onSendMessage={handleSendMessage}
@@ -197,6 +216,20 @@ function ChatRoom({ username, onLogout }) {
         <CreateRoomModal
           onClose={() => setShowCreateRoomModal(false)}
           onCreate={handleCreateRoom}
+        />
+      )}
+
+      {showInviteModal && roomToInvite && (
+        <InviteModal
+          isOpen={showInviteModal}
+          onClose={() => {
+            setShowInviteModal(false)
+            setRoomToInvite(null)
+          }}
+          room={roomToInvite}
+          users={users}
+          onInvite={handleInvite}
+          currentUsername={username}
         />
       )}
     </div>

@@ -186,6 +186,45 @@
   line-height: 1.6;
 }
 
+.toggle-button {
+  background: none;
+  border: none;
+  color: #a78bfa;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  transition: all 0.3s ease;
+  padding: 0;
+  margin-left: 4px;
+  text-shadow: 0 0 10px rgba(139, 92, 246, 0.5);
+}
+
+.toggle-button:hover {
+  color: #8b5cf6;
+  text-shadow: 0 0 15px rgba(139, 92, 246, 0.8);
+}
+
+.toggle-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.login-button:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.input-group input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 @media (max-width: 768px) {
   .login-card {
     padding: 40px 30px;
