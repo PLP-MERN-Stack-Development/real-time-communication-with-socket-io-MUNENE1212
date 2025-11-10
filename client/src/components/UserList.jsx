@@ -18,12 +18,12 @@ function UserList({ users, onSelectUser, selectedUser }) {
         ) : (
           users.map((user) => (
             <button
-              key={user.id}
-              className={`user-item ${selectedUser?.id === user.id ? 'selected' : ''}`}
+              key={user.username}
+              className={`user-item ${selectedUser?.username === user.username ? 'selected' : ''}`}
               onClick={() => onSelectUser(user)}
               role="listitem"
               aria-label={`Start private chat with ${user.username}`}
-              aria-pressed={selectedUser?.id === user.id}
+              aria-pressed={selectedUser?.username === user.username}
             >
               <div className="user-avatar" aria-hidden="true">
                 {user.username.charAt(0).toUpperCase()}

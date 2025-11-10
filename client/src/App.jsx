@@ -80,6 +80,10 @@ function App() {
     setShowLanding(false)
   }
 
+  const handleViewMessages = () => {
+    handleNavigate('private')
+  }
+
   return (
     <div className="app">
       {!isLoggedIn ? (
@@ -119,6 +123,8 @@ function App() {
             theme={theme}
             onThemeToggle={toggleTheme}
             onRefresh={handleRefresh}
+            onMessages={handleViewMessages}
+            unreadCount={socketData.offlineMessages?.length || 0}
           />
           <main className="app-main">
             {currentView === 'home' ? (

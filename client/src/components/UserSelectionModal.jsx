@@ -68,7 +68,7 @@ function UserSelectionModal({ isOpen, onClose, users, currentUsername, onSelectU
             {filteredUsers.length > 0 ? (
               filteredUsers.map(user => (
                 <button
-                  key={user.id}
+                  key={user.username}
                   className="user-card"
                   onClick={() => handleSelectUser(user)}
                 >

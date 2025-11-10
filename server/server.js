@@ -84,9 +84,19 @@ io.on('connection', (socket) => {
         rooms.unshift(globalRoom);
       }
 
-      // Send user list and room list
-      const onlineUsers = Object.values(activeUsers);
-      io.emit('user_list', onlineUsers);
+      // Send all registered users (not just online ones)
+      const allUsers = await User.find().select('username isOnline lastSeen').lean();
+      const userList = allUsers.map(u => {
+        const activeUser = Object.values(activeUsers).find(au => au.username === u.username);
+        return {
+          username: u.username,
+          id: activeUser?.id || null,
+          isOnline: !!activeUser,
+          lastSeen: u.lastSeen
+        };
+      });
+
+      io.emit('user_list', userList);
       io.to('global').emit('user_joined', { username, id: socket.id, room: 'global' });
 
       // Send room list with MongoDB IDs
@@ -99,6 +109,62 @@ io.on('connection', (socket) => {
         members: r.members
       }));
       socket.emit('room_list', roomList);
+
+      // Load and send global room message history
+      const globalMessages = await Message.find({ roomId: 'global' })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+
+      const formattedGlobalMessages = globalMessages.reverse().map(msg => ({
+        id: msg._id.toString(),
+        message: msg.message,
+        sender: msg.sender,
+        senderId: msg.senderId || '',
+        timestamp: msg.createdAt,
+        roomId: msg.roomId,
+        isPrivate: msg.isPrivate || false,
+        reactions: msg.reactions || {},
+        userReactions: msg.userReactions || {}
+      }));
+
+      // Send global room data with message history
+      socket.emit('room_joined', {
+        room: {
+          id: globalRoom._id.toString(),
+          name: globalRoom.name,
+          isPrivate: globalRoom.isPrivate,
+          createdBy: globalRoom.createdBy,
+          createdAt: globalRoom.createdAt,
+          members: globalRoom.members
+        },
+        messages: formattedGlobalMessages
+      });
+
+      // Check for undelivered private messages (offline messages)
+      const offlineMessages = await Message.find({
+        recipientUsername: username,
+        isPrivate: true,
+        delivered: false
+      }).sort({ createdAt: 1 }).lean();
+
+      // Send notifications for offline messages and mark as delivered
+      if (offlineMessages.length > 0) {
+        for (const msg of offlineMessages) {
+          socket.emit('offline_message_notification', {
+            id: msg._id.toString(),
+            sender: msg.sender,
+            message: msg.message,
+            timestamp: msg.createdAt,
+            count: offlineMessages.length
+          });
+
+          // Mark as delivered
+          await Message.findByIdAndUpdate(msg._id, { delivered: true });
+        }
+
+        console.log(`Delivered ${offlineMessages.length} offline messages to ${username}`);
+      }
 
       console.log(`${username} joined the chat`);
     } catch (error) {
@@ -162,22 +228,80 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Handle loading private message history
+  socket.on('load_private_messages', async ({ withUsername }) => {
+    try {
+      const currentUsername = activeUsers[socket.id]?.username;
+
+      if (!currentUsername) {
+        return socket.emit('error', { message: 'User not authenticated' });
+      }
+
+      // Create deterministic private room ID based on usernames (alphabetically sorted)
+      const privateRoomId = `private_${[currentUsername, withUsername].sort().join('_')}`;
+
+      // Get private messages between these two users
+      const privateMessages = await Message.find({
+        roomId: privateRoomId,
+        isPrivate: true
+      })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+
+      // Format messages for client
+      const formattedMessages = privateMessages.reverse().map(msg => ({
+        id: msg._id.toString(),
+        message: msg.message,
+        sender: msg.sender,
+        senderId: msg.senderId || '',
+        recipientUsername: msg.sender === currentUsername ? withUsername : currentUsername,
+        timestamp: msg.createdAt,
+        isPrivate: true,
+        reactions: msg.reactions || {},
+        userReactions: msg.userReactions || {}
+      }));
+
+      socket.emit('private_messages_loaded', {
+        withUsername,
+        messages: formattedMessages
+      });
+
+      console.log(`Loaded ${formattedMessages.length} private messages between ${currentUsername} and ${withUsername}`);
+    } catch (error) {
+      console.error('Error loading private messages:', error);
+      socket.emit('error', { message: 'Failed to load private messages' });
+    }
+  });
+
   // Handle private messages
-  socket.on('private_message', async ({ to, message }) => {
+  socket.on('private_message', async ({ to, message, toUsername }) => {
     try {
       const sender = activeUsers[socket.id]?.username || 'Anonymous';
-      const recipientUser = activeUsers[to];
-      const recipientUsername = recipientUser?.username || 'Unknown';
 
-      // Save private message to MongoDB with special roomId
-      const privateRoomId = `private_${[socket.id, to].sort().join('_')}`;
+      // toUsername is required now (since we can message offline users)
+      const recipientUsername = toUsername;
+      if (!recipientUsername) {
+        return socket.emit('error', { message: 'Recipient username is required' });
+      }
 
+      // Find recipient's socket ID if they're online
+      const recipientUser = Object.values(activeUsers).find(u => u.username === recipientUsername);
+      const recipientSocketId = recipientUser?.id || null;
+
+      // Create deterministic private room ID based on usernames (alphabetically sorted)
+      const privateRoomId = `private_${[sender, recipientUsername].sort().join('_')}`;
+
+      // Save message to database (works for both online and offline users)
       const newMessage = await Message.create({
         roomId: privateRoomId,
         sender,
         senderId: socket.id,
         message,
         isPrivate: true,
+        recipientUsername: recipientUsername,
+        delivered: !!recipientSocketId,  // Mark as delivered only if recipient is online
+        read: false,
         reactions: new Map(),
         userReactions: new Map()
       });
@@ -186,7 +310,7 @@ io.on('connection', (socket) => {
         id: newMessage._id.toString(),
         sender,
         senderId: socket.id,
-        recipientId: to,
+        recipientId: recipientSocketId,
         recipientUsername: recipientUsername,
         message,
         timestamp: newMessage.createdAt,
@@ -195,12 +319,16 @@ io.on('connection', (socket) => {
         userReactions: {}
       };
 
-      // Send to recipient
-      socket.to(to).emit('private_message', messageData);
+      // Send to recipient ONLY if they're online
+      if (recipientSocketId) {
+        socket.to(recipientSocketId).emit('private_message', messageData);
+        console.log(`Private message delivered to online user: ${sender} -> ${recipientUsername}`);
+      } else {
+        console.log(`Private message saved for offline user: ${sender} -> ${recipientUsername}`);
+      }
+
       // Send back to sender for confirmation
       socket.emit('private_message', messageData);
-
-      console.log(`Private message from ${sender} to ${recipientUsername}`);
     } catch (error) {
       console.error('Error sending private message:', error);
       socket.emit('error', { message: 'Failed to send private message' });
@@ -463,7 +591,19 @@ io.on('connection', (socket) => {
 
     delete activeUsers[socket.id];
 
-    io.emit('user_list', Object.values(activeUsers));
+    // Send updated user list with all registered users
+    User.find().select('username isOnline lastSeen').lean().then(allUsers => {
+      const userList = allUsers.map(u => {
+        const activeUser = Object.values(activeUsers).find(au => au.username === u.username);
+        return {
+          username: u.username,
+          id: activeUser?.id || null,
+          isOnline: !!activeUser,
+          lastSeen: u.lastSeen
+        };
+      });
+      io.emit('user_list', userList);
+    });
   });
 });
 

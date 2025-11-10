@@ -33,6 +33,18 @@ const messageSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  recipientUsername: {
+    type: String,  // For private messages - who should receive it
+    default: null
+  },
+  delivered: {
+    type: Boolean,
+    default: false  // Set to true when recipient comes online and message is delivered
+  },
+  read: {
+    type: Boolean,
+    default: false  // Set to true when recipient reads the message
+  },
   reactions: {
     type: Map,
     of: reactionSchema,

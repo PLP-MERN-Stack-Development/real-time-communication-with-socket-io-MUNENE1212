@@ -23,6 +23,7 @@ export const useSocket = () => {
   const [typingUsers, setTypingUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [currentRoom, setCurrentRoom] = useState(null);
+  const [offlineMessages, setOfflineMessages] = useState([]);
 
   // Connect to socket server
   const connect = (username) => {
@@ -168,6 +169,11 @@ export const useSocket = () => {
       // Optionally add a system message
     };
 
+    const onOfflineMessageNotification = (notification) => {
+      console.log('Received offline message notification:', notification);
+      setOfflineMessages((prev) => [...prev, notification]);
+    };
+
     // Register event listeners
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -183,6 +189,7 @@ export const useSocket = () => {
     socket.on('room_created', onRoomCreated);
     socket.on('user_joined_room', onUserJoinedRoom);
     socket.on('user_left_room', onUserLeftRoom);
+    socket.on('offline_message_notification', onOfflineMessageNotification);
 
     // Clean up event listeners
     return () => {
@@ -200,8 +207,13 @@ export const useSocket = () => {
       socket.off('room_created', onRoomCreated);
       socket.off('user_joined_room', onUserJoinedRoom);
       socket.off('user_left_room', onUserLeftRoom);
+      socket.off('offline_message_notification', onOfflineMessageNotification);
     };
   }, []);
+
+  const clearOfflineMessages = () => {
+    setOfflineMessages([]);
+  };
 
   return {
     socket,
@@ -212,6 +224,7 @@ export const useSocket = () => {
     typingUsers,
     rooms,
     currentRoom,
+    offlineMessages,
     connect,
     disconnect,
     sendMessage,
@@ -222,6 +235,7 @@ export const useSocket = () => {
     joinRoom,
     leaveRoom,
     inviteToRoom,
+    clearOfflineMessages,
   };
 };
 

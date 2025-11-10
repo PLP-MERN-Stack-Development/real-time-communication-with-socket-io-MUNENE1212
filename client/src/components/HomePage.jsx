@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react'
 import './HomePage.css'
 
 function HomePage({ username, onLogout, onNavigate, socketData }) {
-  const { isConnected, users, rooms } = socketData
+  const { isConnected, users, rooms, offlineMessages, clearOfflineMessages } = socketData
   const [stats, setStats] = useState({
     onlineUsers: 0,
     activeRooms: 0
   })
+  const [showOfflineNotification, setShowOfflineNotification] = useState(false)
 
   useEffect(() => {
     setStats({
@@ -14,6 +15,23 @@ function HomePage({ username, onLogout, onNavigate, socketData }) {
       activeRooms: rooms?.length || 0
     })
   }, [users, rooms])
+
+  useEffect(() => {
+    if (offlineMessages && offlineMessages.length > 0) {
+      setShowOfflineNotification(true)
+    }
+  }, [offlineMessages])
+
+  const handleDismissOfflineNotification = () => {
+    setShowOfflineNotification(false)
+    clearOfflineMessages()
+  }
+
+  const handleViewOfflineMessages = () => {
+    // Navigate to private messages
+    onNavigate('private')
+    // Don't clear messages yet - let them see in the chat
+  }
 
   const navigationOptions = [
     {
@@ -65,6 +83,43 @@ function HomePage({ username, onLogout, onNavigate, socketData }) {
             </button>
           </div>
         </header>
+
+        {/* Offline Messages Notification */}
+        {showOfflineNotification && offlineMessages.length > 0 && (
+          <div className="offline-notification-banner">
+            <div className="offline-notification-content" onClick={handleViewOfflineMessages}>
+              <div className="offline-notification-icon">📬</div>
+              <div className="offline-notification-text">
+                <h3>You have {offlineMessages.length} new message{offlineMessages.length > 1 ? 's' : ''} while you were away!</h3>
+                <div className="offline-message-preview">
+                  {offlineMessages.slice(0, 3).map((msg, index) => (
+                    <div key={msg.id || index} className="offline-message-item">
+                      <strong>{msg.sender}:</strong> {msg.message.substring(0, 50)}{msg.message.length > 50 ? '...' : ''}
+                    </div>
+                  ))}
+                  {offlineMessages.length > 3 && (
+                    <div className="offline-message-more">
+                      +{offlineMessages.length - 3} more message{offlineMessages.length - 3 > 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+                <div className="offline-notification-cta">
+                  Click to view messages →
+                </div>
+              </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDismissOfflineNotification();
+                }}
+                className="offline-notification-close"
+                aria-label="Dismiss notification"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Stats Section */}
         <div className="stats-section">
