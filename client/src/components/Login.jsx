@@ -70,13 +70,13 @@ function Login({ onLogin }) {
 
   return (
     <div className="login-container">
-      <div className="login-card">
+      <div className="login-card" role="main" aria-labelledby="login-title">
         <div className="login-header">
-          <h1>Real-Time Chat</h1>
-          <p>{isLogin ? 'Welcome back!' : 'Create your account'}</p>
+          <h1 id="login-title">Real-Time Chat</h1>
+          <p aria-live="polite">{isLogin ? 'Welcome back!' : 'Create your account'}</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="login-form">
+        <form onSubmit={handleSubmit} className="login-form" aria-label={isLogin ? 'Login form' : 'Registration form'}>
           <div className="input-group">
             <label htmlFor="username">Username</label>
             <input
@@ -87,6 +87,9 @@ function Login({ onLogin }) {
               placeholder="Enter your username..."
               autoFocus
               disabled={loading}
+              aria-required="true"
+              aria-invalid={error && !username ? 'true' : 'false'}
+              aria-describedby={error && !username ? 'error-message' : undefined}
             />
           </div>
 
@@ -99,12 +102,29 @@ function Login({ onLogin }) {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Enter your password..."
               disabled={loading}
+              aria-required="true"
+              aria-invalid={error && !password ? 'true' : 'false'}
+              aria-describedby={error && !password ? 'error-message' : undefined}
             />
           </div>
 
-          {error && <span className="error-message">{error}</span>}
+          {error && (
+            <span
+              id="error-message"
+              className="error-message"
+              role="alert"
+              aria-live="assertive"
+            >
+              {error}
+            </span>
+          )}
 
-          <button type="submit" className="login-button" disabled={loading}>
+          <button
+            type="submit"
+            className="login-button"
+            disabled={loading}
+            aria-busy={loading}
+          >
             {loading ? 'Please wait...' : (isLogin ? 'Login' : 'Register')}
           </button>
         </form>
@@ -117,6 +137,7 @@ function Login({ onLogin }) {
               className="toggle-button"
               onClick={toggleMode}
               disabled={loading}
+              aria-label={isLogin ? 'Switch to registration' : 'Switch to login'}
             >
               {isLogin ? 'Register' : 'Login'}
             </button>

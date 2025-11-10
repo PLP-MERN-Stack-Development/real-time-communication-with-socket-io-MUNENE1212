@@ -95,29 +95,36 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
     ? messages.filter(msg => {
         if (!msg.isPrivate) return false;
 
-        // Show messages where:
-        // 1. Current user is the sender and selected user is the recipient
-        // 2. Selected user is the sender and current user is the recipient
+        // Show messages where either:
+        // 1. Current user sent to selected user
+        // 2. Selected user sent to current user
         const isFromCurrentToSelected =
           msg.sender === currentUsername &&
-          (msg.recipientUsername === selectedUser.username || msg.recipientId === selectedUser.id);
+          msg.recipientUsername === selectedUser.username;
 
         const isFromSelectedToCurrent =
-          (msg.sender === selectedUser.username || msg.senderId === selectedUser.id);
+          msg.sender === selectedUser.username;
 
         return isFromCurrentToSelected || isFromSelectedToCurrent;
       })
-    : messages.filter(msg => !msg.isPrivate)
+    : messages.filter(msg => {
+        // For room messages, show only non-private messages in current room
+        if (msg.isPrivate) return false;
+        const msgRoomId = msg.roomId || 'global';
+        const currentRoomId = currentRoom?.id || 'global';
+        return msgRoomId === currentRoomId;
+      })
 
   const reactions = ['👍', '❤️', '😂', '😮', '🎉', '🔥']
 
   return (
-    <div className="message-list">
+    <div className="message-list" role="log" aria-live="polite" aria-atomic="false" aria-label="Chat messages">
       {page > 1 && (
         <button
           onClick={loadMoreMessages}
           className="load-more-button"
           disabled={isLoadingMore}
+          aria-label="Load older messages"
         >
           {isLoadingMore ? 'Loading...' : 'Load older messages'}
         </button>
@@ -128,28 +135,33 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
         const msgReactions = messageReactions[msg.id] || {}
 
         return (
-          <div
+          <article
             key={msg.id}
             className={`message ${isOwnMessage ? 'own-message' : 'other-message'} ${
               msg.system ? 'system-message' : ''
             }`}
+            aria-label={msg.system ? 'System message' : `Message from ${msg.sender} at ${formatTime(msg.timestamp)}`}
           >
             {msg.system ? (
-              <div className="system-message-content">
+              <div className="system-message-content" role="status">
                 <span>{msg.message}</span>
               </div>
             ) : (
               <>
                 <div className="message-header">
-                  <span
+                  <button
                     className={`message-sender ${msg.sender !== currentUsername ? 'clickable' : ''}`}
-                    style={{ color: getUserColor(msg.sender) }}
+                    style={{ color: getUserColor(msg.sender), background: 'none', border: 'none', padding: 0, font: 'inherit', cursor: msg.sender !== currentUsername ? 'pointer' : 'default' }}
                     onClick={() => handleUsernameClick(msg.sender, msg.senderId)}
-                    title={msg.sender !== currentUsername ? `Click to send private message to ${msg.sender}` : ''}
+                    disabled={msg.sender === currentUsername}
+                    aria-label={msg.sender !== currentUsername ? `Send private message to ${msg.sender}` : undefined}
+                    tabIndex={msg.sender !== currentUsername ? 0 : -1}
                   >
                     {msg.sender}
-                  </span>
-                  <span className="message-time">{formatTime(msg.timestamp)}</span>
+                  </button>
+                  <time className="message-time" dateTime={msg.timestamp}>
+                    {formatTime(msg.timestamp)}
+                  </time>
                 </div>
                 <div className="message-content">
                   <div
@@ -160,12 +172,12 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
                   </div>
 
                   {msg.isPrivate && (
-                    <span className="private-badge">Private</span>
+                    <span className="private-badge" aria-label="Private message">Private</span>
                   )}
                 </div>
 
-                <div className="message-reactions">
-                  <div className="reaction-picker">
+                <div className="message-reactions" role="group" aria-label="Message reactions">
+                  <div className="reaction-picker" role="toolbar" aria-label="Add reaction">
                     {reactions.map(emoji => {
                       const userReacted = getUserReaction(msg.id) === emoji
                       return (
@@ -173,7 +185,8 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
                           key={emoji}
                           onClick={() => handleReaction(msg.id, emoji)}
                           className={`reaction-button ${userReacted ? 'selected' : ''}`}
-                          title={userReacted ? 'Remove reaction' : `React with ${emoji}`}
+                          aria-label={userReacted ? `Remove ${emoji} reaction` : `React with ${emoji}`}
+                          aria-pressed={userReacted}
                         >
                           {emoji}
                         </button>
@@ -182,14 +195,16 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
                   </div>
 
                   {Object.keys(msgReactions).length > 0 && (
-                    <div className="active-reactions">
+                    <div className="active-reactions" role="list" aria-label="Current reactions">
                       {Object.entries(msgReactions).map(([emoji, data]) => (
                         <span
                           key={emoji}
+                          role="listitem"
                           className={`reaction-count ${getUserReaction(msg.id) === emoji ? 'user-reacted' : ''}`}
+                          aria-label={`${emoji} reaction by ${data.users?.join(', ')}`}
                           title={data.users?.join(', ')}
                         >
-                          {emoji} {data.count}
+                          <span aria-hidden="true">{emoji}</span> {data.count}
                         </span>
                       ))}
                     </div>
@@ -197,7 +212,7 @@ function MessageList({ messages, currentUsername, selectedUser, currentRoom, onS
                 </div>
               </>
             )}
-          </div>
+          </article>
         )
       })}
       <div ref={messagesEndRef} />

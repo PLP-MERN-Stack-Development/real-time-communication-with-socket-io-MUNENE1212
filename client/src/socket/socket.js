@@ -43,8 +43,13 @@ export const useSocket = () => {
   };
 
   // Send a private message
-  const sendPrivateMessage = (to, message) => {
-    socket.emit('private_message', { to, message });
+  const sendPrivateMessage = (to, message, toUsername) => {
+    socket.emit('private_message', { to, message, toUsername });
+  };
+
+  // Load private message history
+  const loadPrivateMessages = (withUsername) => {
+    socket.emit('load_private_messages', { withUsername });
   };
 
   // Set typing status
@@ -91,8 +96,22 @@ export const useSocket = () => {
       setMessages((prev) => [...prev, message]);
     };
 
+    const onPrivateMessagesLoaded = ({ withUsername, messages: loadedMessages }) => {
+      // Replace existing private messages with loaded ones for this conversation
+      setMessages((prev) => {
+        // Filter out any existing private messages with this user
+        const filtered = prev.filter(msg => {
+          if (!msg.isPrivate) return true;
+          return msg.sender !== withUsername && msg.recipientUsername !== withUsername;
+        });
+        // Add the loaded messages
+        return [...filtered, ...loadedMessages];
+      });
+    };
+
     // User events
     const onUserList = (userList) => {
+      console.log('Received user_list event:', userList);
       setUsers(userList);
     };
 
@@ -154,6 +173,7 @@ export const useSocket = () => {
     socket.on('disconnect', onDisconnect);
     socket.on('receive_message', onReceiveMessage);
     socket.on('private_message', onPrivateMessage);
+    socket.on('private_messages_loaded', onPrivateMessagesLoaded);
     socket.on('user_list', onUserList);
     socket.on('user_joined', onUserJoined);
     socket.on('user_left', onUserLeft);
@@ -170,6 +190,7 @@ export const useSocket = () => {
       socket.off('disconnect', onDisconnect);
       socket.off('receive_message', onReceiveMessage);
       socket.off('private_message', onPrivateMessage);
+      socket.off('private_messages_loaded', onPrivateMessagesLoaded);
       socket.off('user_list', onUserList);
       socket.off('user_joined', onUserJoined);
       socket.off('user_left', onUserLeft);
@@ -195,6 +216,7 @@ export const useSocket = () => {
     disconnect,
     sendMessage,
     sendPrivateMessage,
+    loadPrivateMessages,
     setTyping,
     createRoom,
     joinRoom,

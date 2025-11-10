@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
-import { useSocket } from '../socket/socket'
 import MessageList from './MessageList'
 import MessageInput from './MessageInput'
 import UserList from './UserList'
 import RoomList from './RoomList'
 import CreateRoomModal from './CreateRoomModal'
 import InviteModal from './InviteModal'
+import UserSelectionModal from './UserSelectionModal'
+import RoomsBrowser from './RoomsBrowser'
 import NotificationManager from './NotificationManager'
 import './ChatRoom.css'
 
-function ChatRoom({ username, onLogout }) {
+function ChatRoom({ username, onLogout, initialNavigation, onBackToHome, socketData }) {
   const {
     isConnected,
     messages,
@@ -19,12 +20,13 @@ function ChatRoom({ username, onLogout }) {
     currentRoom,
     sendMessage,
     sendPrivateMessage,
+    loadPrivateMessages,
     setTyping,
     createRoom,
     joinRoom,
     inviteToRoom,
     lastMessage
-  } = useSocket()
+  } = socketData
 
   const [unreadCount, setUnreadCount] = useState(0)
   const [isWindowFocused, setIsWindowFocused] = useState(true)
@@ -33,7 +35,32 @@ function ChatRoom({ username, onLogout }) {
   const [notificationMessage, setNotificationMessage] = useState(null)
   const [showCreateRoomModal, setShowCreateRoomModal] = useState(false)
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showUserSelectionModal, setShowUserSelectionModal] = useState(false)
+  const [showRoomsBrowser, setShowRoomsBrowser] = useState(false)
   const [roomToInvite, setRoomToInvite] = useState(null)
+
+  // Handle initial navigation from home page
+  useEffect(() => {
+    if (initialNavigation) {
+      console.log('Initial navigation:', initialNavigation, 'Users:', users, 'Rooms:', rooms)
+      switch (initialNavigation) {
+        case 'create':
+          setShowCreateRoomModal(true)
+          break
+        case 'private':
+          setShowUserSelectionModal(true)
+          break
+        case 'rooms':
+          setShowRoomsBrowser(true)
+          break
+        case 'global':
+          joinRoom('global')
+          break
+        default:
+          break
+      }
+    }
+  }, [initialNavigation])
 
   // Request notification permission on mount
   useEffect(() => {
@@ -113,7 +140,9 @@ function ChatRoom({ username, onLogout }) {
 
   const handleSendMessage = (message) => {
     if (selectedUser) {
-      sendPrivateMessage(selectedUser.id, message)
+      // Use socket ID if online, otherwise null (username is always required)
+      const recipientSocketId = selectedUser.id || null
+      sendPrivateMessage(recipientSocketId, message, selectedUser.username)
     } else {
       const roomId = currentRoom?.id || 'global'
       sendMessage(message, roomId)
@@ -144,25 +173,47 @@ function ChatRoom({ username, onLogout }) {
 
   const handleSelectUser = (user) => {
     setSelectedUser(user)
+    // Load private message history when user is selected
+    if (user && user.username) {
+      loadPrivateMessages(user.username)
+    }
   }
 
   return (
     <div className="chat-room">
       <div className="chat-header">
         <div className="header-left">
-          <h2>{currentRoom?.name || 'Real-Time Chat'}</h2>
-          <span className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-            {isConnected ? '● Connected' : '● Disconnected'}
-          </span>
+          {onBackToHome && (
+            <button onClick={onBackToHome} className="back-button" title="Back to Home">
+              ← Home
+            </button>
+          )}
+          {selectedUser ? (
+            <>
+              <h2>💬 {selectedUser.username}</h2>
+              <span className={`private-user-status ${selectedUser.isOnline ? 'online' : 'offline'}`}>
+                {selectedUser.isOnline ? '● Online' : '● Offline'}
+              </span>
+            </>
+          ) : (
+            <>
+              <h2>{currentRoom?.name || 'Real-Time Chat'}</h2>
+              <span className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                {isConnected ? '● Connected' : '● Disconnected'}
+              </span>
+            </>
+          )}
         </div>
         <div className="header-right">
+          {selectedUser && (
+            <button onClick={() => setSelectedUser(null)} className="close-private-btn">
+              Close Chat
+            </button>
+          )}
           <span className="username-display">@{username}</span>
           {unreadCount > 0 && (
             <span className="unread-badge">{unreadCount}</span>
           )}
-          <button onClick={onLogout} className="logout-button">
-            Logout
-          </button>
         </div>
       </div>
 
@@ -176,14 +227,6 @@ function ChatRoom({ username, onLogout }) {
         />
 
         <div className="chat-main">
-          {selectedUser && (
-            <div className="private-chat-header">
-              <span>Private chat with {selectedUser.username}</span>
-              <button onClick={() => setSelectedUser(null)} className="close-private">
-                ×
-              </button>
-            </div>
-          )}
           <MessageList
             messages={messages}
             currentUsername={username}
@@ -229,6 +272,26 @@ function ChatRoom({ username, onLogout }) {
           room={roomToInvite}
           users={users}
           onInvite={handleInvite}
+          currentUsername={username}
+        />
+      )}
+
+      {showUserSelectionModal && (
+        <UserSelectionModal
+          isOpen={showUserSelectionModal}
+          onClose={() => setShowUserSelectionModal(false)}
+          users={users}
+          currentUsername={username}
+          onSelectUser={handleSelectUser}
+        />
+      )}
+
+      {showRoomsBrowser && (
+        <RoomsBrowser
+          isOpen={showRoomsBrowser}
+          onClose={() => setShowRoomsBrowser(false)}
+          rooms={rooms}
+          onJoinRoom={handleSelectRoom}
           currentUsername={username}
         />
       )}

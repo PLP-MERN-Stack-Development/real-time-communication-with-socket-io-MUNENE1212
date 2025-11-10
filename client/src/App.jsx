@@ -1,13 +1,26 @@
 import { useState, useEffect } from 'react'
+import Header from './components/Header'
+import Footer from './components/Footer'
 import Login from './components/Login'
+import LandingPage from './components/LandingPage'
+import HomePage from './components/HomePage'
 import ChatRoom from './components/ChatRoom'
 import { useSocket } from './socket/socket'
+import { useTheme } from './hooks/useTheme'
 import './App.css'
 
 function App() {
   const [username, setUsername] = useState('')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const { isConnected, connect, disconnect } = useSocket()
+  const [showLanding, setShowLanding] = useState(true)
+  const [currentView, setCurrentView] = useState('home') // 'home' or 'chat'
+  const [initialNavigation, setInitialNavigation] = useState(null)
+
+  // Get all socket data from one place
+  const socketData = useSocket()
+
+  // Theme management
+  const { theme, toggleTheme } = useTheme()
 
   useEffect(() => {
     // Check if user was previously logged in
@@ -15,13 +28,14 @@ function App() {
     if (savedUsername) {
       setUsername(savedUsername)
       setIsLoggedIn(true)
-      connect(savedUsername)
+      setShowLanding(false)
+      socketData.connect(savedUsername)
     }
 
     // Cleanup on unmount
     return () => {
-      if (isConnected) {
-        disconnect()
+      if (socketData.isConnected) {
+        socketData.disconnect()
       }
     }
   }, [])
@@ -30,22 +44,102 @@ function App() {
     setUsername(name)
     setIsLoggedIn(true)
     localStorage.setItem('chatUsername', name)
-    connect(name)
+    socketData.connect(name)
   }
 
   const handleLogout = () => {
     setIsLoggedIn(false)
     setUsername('')
+    setCurrentView('home')
+    setInitialNavigation(null)
     localStorage.removeItem('chatUsername')
-    disconnect()
+    socketData.disconnect()
+  }
+
+  const handleNavigate = (destination) => {
+    setInitialNavigation(destination)
+    setCurrentView('chat')
+  }
+
+  const handleBackToHome = () => {
+    setCurrentView('home')
+    setInitialNavigation(null)
+  }
+
+  const handleRefresh = () => {
+    // Refresh by reconnecting socket - this will fetch fresh data
+    if (socketData.isConnected) {
+      socketData.disconnect()
+      setTimeout(() => {
+        socketData.connect(username)
+      }, 100)
+    }
+  }
+
+  const handleGetStarted = () => {
+    setShowLanding(false)
   }
 
   return (
     <div className="app">
       {!isLoggedIn ? (
-        <Login onLogin={handleLogin} />
+        showLanding ? (
+          <>
+            <Header
+              theme={theme}
+              onThemeToggle={toggleTheme}
+              isLoggedIn={false}
+            />
+            <LandingPage
+              onGetStarted={handleGetStarted}
+              theme={theme}
+              onThemeToggle={toggleTheme}
+            />
+            <Footer />
+          </>
+        ) : (
+          <>
+            <Header
+              theme={theme}
+              onThemeToggle={toggleTheme}
+              isLoggedIn={false}
+            />
+            <Login onLogin={handleLogin} />
+          </>
+        )
       ) : (
-        <ChatRoom username={username} onLogout={handleLogout} />
+        <>
+          <Header
+            username={username}
+            isLoggedIn={isLoggedIn}
+            onLogout={handleLogout}
+            showBackButton={currentView === 'chat'}
+            onBack={handleBackToHome}
+            title={currentView === 'home' ? 'Dashboard' : 'Chat'}
+            theme={theme}
+            onThemeToggle={toggleTheme}
+            onRefresh={handleRefresh}
+          />
+          <main className="app-main">
+            {currentView === 'home' ? (
+              <HomePage
+                username={username}
+                onLogout={handleLogout}
+                onNavigate={handleNavigate}
+                socketData={socketData}
+              />
+            ) : (
+              <ChatRoom
+                username={username}
+                onLogout={handleLogout}
+                initialNavigation={initialNavigation}
+                onBackToHome={handleBackToHome}
+                socketData={socketData}
+              />
+            )}
+          </main>
+          <Footer />
+        </>
       )}
     </div>
   )
